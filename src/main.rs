@@ -28,7 +28,7 @@ mod call;
 
 use account::get_account;
 use call::{call_contract, call_contract_with_msg, generate_message};
-use clap::ArgMatches;
+use clap::{ArgMatches, SubCommand, Arg};
 use config::{Config, set_config};
 use crypto::{generate_mnemonic, extract_pubkey, generate_keypair};
 use deploy::deploy_contract;
@@ -70,6 +70,46 @@ fn main_internal() -> Result <(), String> {
         Some(s) => s,
         None => "none",
     };
+
+    let call_sub_command = SubCommand::with_name("call")
+        .about("Sends external message to contract with encoded function call.")
+        .arg(Arg::with_name("ABI")
+            .help("Json file with contract ABI.")
+            .takes_value(true)
+            .long("abi"))
+        .arg(Arg::with_name("SIGN")
+            .help("Keypair used to sign message.")
+            .takes_value(true)
+            .long("sign"))
+        .arg(Arg::with_name("ADDRESS")
+            .help("Contract address."))
+            //.required(true)
+            //.index(1))
+        .arg(Arg::with_name("METHOD")
+            .help("Name of calling contract method."))
+            //.required(true)
+            //.index(2))
+        .arg(Arg::with_name("PARAMS")
+            .help("Arguments for the contract method.")
+            //.required(true)
+            //.index(3)
+            .multiple(true));
+        
+    
+    /*
+    (@subcommand call =>
+        (@setting AllowLeadingHyphen)
+        (about: "Sends external message to contract with encoded function call.")
+        (version: "0.1")
+        (author: "TONLabs")
+        (@arg ADDRESS: +required +takes_value "Contract address.")
+        (@arg METHOD: +required +takes_value "Name of calling contract method.")
+        (@arg PARAMS: +required +takes_value "Arguments for the contract method.")
+        (@arg ABI: --abi +takes_value "Json file with contract ABI.")
+        (@arg SIGN: --sign +takes_value "Keypair used to sign message.")
+        (@arg VERBOSE: -v --verbose "Prints additional information about command execution.")
+    )
+    */
 
     let matches = clap_app! (tonlabs_cli =>
         (version: &*format!("0.1 ({})", build_info))
@@ -127,18 +167,7 @@ fn main_internal() -> Result <(), String> {
             (@arg WC: --wc +takes_value "Workchain id of the smart contract (default 0).")
             (@arg VERBOSE: -v --verbose "Prints additional information about command execution.")
         )
-        (@subcommand call =>
-            (@setting AllowLeadingHyphen)
-            (about: "Sends external message to contract with encoded function call.")
-            (version: "0.1")
-            (author: "TONLabs")
-            (@arg ADDRESS: +required +takes_value "Contract address.")
-            (@arg METHOD: +required +takes_value "Name of calling contract method.")
-            (@arg PARAMS: +required +takes_value "Arguments for the contract method.")
-            (@arg ABI: --abi +takes_value "Json file with contract ABI.")
-            (@arg SIGN: --sign +takes_value "Keypair used to sign message.")
-            (@arg VERBOSE: -v --verbose "Prints additional information about command execution.")
-        )
+        (subcommand: call_sub_command)
         (@subcommand send =>
             (about: "Sends prepared message to contract.")
             (version: "0.1")
