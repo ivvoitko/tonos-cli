@@ -252,3 +252,18 @@ pub fn call_contract_with_msg(conf: Config, str_msg: String, abi: String) -> Res
     }
     Ok(())
 }
+
+pub fn build_json_from_params(params_vec: Vec<&str>) -> Result<String, String> {
+    println!("{:?}", params_vec);
+    let mut params_json = json!({ });
+    let iter = params_vec.chunks_exact(2);
+    if iter.remainder().len() != 0 {
+        Err("invalid function parameters count")?;
+    }
+    for pair in iter {
+        let name = pair[0].trim_start_matches('-');
+        params_json[name] = json!(pair[1]);
+    }
+
+    serde_json::to_string(&params_json).map_err(|e| format!("{}", e))
+}
