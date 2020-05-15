@@ -20,6 +20,7 @@ extern crate serde_derive;
 
 mod account;
 mod config;
+mod convert;
 mod crypto;
 mod deploy;
 mod genaddr;
@@ -272,25 +273,9 @@ fn main_internal() -> Result <(), String> {
 
 fn convert_tokens(matches: &ArgMatches) -> Result<(), String> {
     let amount = matches.value_of("AMOUNT").unwrap();
-    let parts: Vec<&str> = amount.split(".").collect();
-    if parts.len() >= 1 && parts.len() <= 2 {
-        let mut result = String::new();
-        result += parts[0];
-        if parts.len() == 2 {
-            let fraction = format!("{:0<9}", parts[1]);
-            if fraction.len() != 9 {
-                return Err("invalid fractional part".to_string());
-            }
-            result += &fraction;
-        } else {
-            result += "000000000";
-        }
-        u64::from_str_radix(&result, 10)
-            .map_err(|e| format!("failed to parse amount: {}", e))?;
-        println!("{}", result);
-        return Ok(());
-    }
-    return Err("Invalid amout value".to_string());
+    let result = convert::convert_token(amount)?;
+    println!("{}", result);
+    Ok(())
 }
 
 fn genphrase_command(_matches: &ArgMatches, _config: Config) -> Result<(), String> {
@@ -402,7 +387,12 @@ fn callex_command(matches: &ArgMatches, config: Config) -> Result<(), String> {
         .ok_or("ABI is not defined. Supply it in config file or in command line.".to_string())?
     );
     
-    let params = Some(build_json_from_params(matches.values_of("PARAMS").unwrap().collect::<Vec<_>>())?);
+    let loaded_abi = std::fs::read_to_string(abi.as_ref().unwrap())
+        .map_err(|e| format!("failed to read ABI file: {}", e.to_string()))?;
+
+    let params = Some(build_json_from_params(
+        matches.values_of("PARAMS").unwrap().collect::<Vec<_>>(), &loaded_abi, method.clone().unwrap()
+    )?);
     
     let keys = matches.value_of("SIGN")
     .map(|s| s.to_string())
@@ -410,14 +400,13 @@ fn callex_command(matches: &ArgMatches, config: Config) -> Result<(), String> {
     
     print_args!(matches, address, method, params, abi, keys);
     
-    let abi = std::fs::read_to_string(abi.unwrap())
-        .map_err(|e| format!("failed to read ABI file: {}", e.to_string()))?;
+    
     
 
     call_contract(
         config,
         &address.unwrap(),
-        abi,
+        loaded_abi,
         method.unwrap(),
         &params.unwrap(),
         keys,

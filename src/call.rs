@@ -13,6 +13,8 @@
  */
 use crate::config::Config;
 use crate::crypto::load_keypair;
+use crate::convert;
+use ton_abi::{Contract, ParamType};
 use chrono::{TimeZone, Local};
 use hex;
 use std::time::SystemTime;
@@ -253,16 +255,63 @@ pub fn call_contract_with_msg(conf: Config, str_msg: String, abi: String) -> Res
     Ok(())
 }
 
-pub fn build_json_from_params(params_vec: Vec<&str>) -> Result<String, String> {
+/*fn parse_integer_param() -> Result<String, String> {
+
+}*/
+
+pub fn build_json_from_params(params_vec: Vec<&str>, abi: &str, method: &str) -> Result<String, String> {
     println!("{:?}", params_vec);
+
+    let abi_obj = Contract::load(abi.as_bytes()).map_err(|e| format!("failed to parse ABI: {}", e))?;
+    let functions = abi_obj.functions();
+        
+    let func_obj = functions.get(method).unwrap();
+    let inputs = func_obj.input_params();
+
     let mut params_json = json!({ });
-    let iter = params_vec.chunks_exact(2);
-    if iter.remainder().len() != 0 {
-        Err("invalid function parameters count")?;
-    }
-    for pair in iter {
-        let name = pair[0].trim_start_matches('-');
-        params_json[name] = json!(pair[1]);
+    for input in inputs {
+        let mut iter = params_vec.iter();
+        let param = iter.find(|x| x.trim_start_matches('-') == input.name)
+            .ok_or(format!(r#"argument "{}" of type "{}" not found"#, input.name, input.kind))?;
+
+        let value = iter.next()
+            .ok_or(format!(r#"argument "{}" of type "{}" has no value"#, input.name, input.kind))?
+            .to_string();
+
+        let value = match input.kind {
+            ParamType::Uint(_) | ParamType::Int(_) => {
+                if value.ends_with('T') {
+                    json!(convert::convert_token(value.trim_end_matches('T'))?)
+                } else {
+                    json!(value)
+                }
+            },
+            ParamType::Array(ref x) => {
+                if let ParamType::Uint(_) = **x {
+                    let mut result_vec: Vec<String> = vec![];
+                    for i in value.split(|c| c == ',' || c == '[' || c == ']') {
+                        if i != "" {
+                            if i.find(|c| (c >= 'a') && (c <= 'f')).is_some()  {
+                                let cur_i = i.trim_matches('\"');
+                                let mut result = String::new();
+                                if !cur_i.starts_with("0x") { result += "0x"; }
+                                result += cur_i;
+                                result_vec.push(result);
+                            } else {
+                                result_vec.push(i.to_owned());
+                            }
+                        }
+                    }
+                    json!(result_vec)
+                } else {
+                    json!(value)
+                }
+            },
+            _ => {
+                json!(value)
+            }
+        };
+        params_json[input.name.clone()] = value;
     }
 
     serde_json::to_string(&params_json).map_err(|e| format!("{}", e))
