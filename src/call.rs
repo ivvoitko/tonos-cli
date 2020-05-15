@@ -255,13 +255,22 @@ pub fn call_contract_with_msg(conf: Config, str_msg: String, abi: String) -> Res
     Ok(())
 }
 
-/*fn parse_integer_param() -> Result<String, String> {
+fn parse_integer_param(value: &str) -> Result<String, String> {
+    let value = value.trim_matches('\"');
 
-}*/
+    if value.ends_with('T') {
+        convert::convert_token(value.trim_end_matches('T'))
+    } else if value.find(|c| (c >= 'a') && (c <= 'f')).is_some()  {
+        let mut result = String::new();
+        if !value.starts_with("0x") { result += "0x"; }
+        result += value;
+        Ok(result)
+    } else {
+        Ok(value.to_owned())
+    }
+}
 
-pub fn build_json_from_params(params_vec: Vec<&str>, abi: &str, method: &str) -> Result<String, String> {
-    println!("{:?}", params_vec);
-
+fn build_json_from_params(params_vec: Vec<&str>, abi: &str, method: &str) -> Result<String, String> {
     let abi_obj = Contract::load(abi.as_bytes()).map_err(|e| format!("failed to parse ABI: {}", e))?;
     let functions = abi_obj.functions();
         
@@ -271,7 +280,7 @@ pub fn build_json_from_params(params_vec: Vec<&str>, abi: &str, method: &str) ->
     let mut params_json = json!({ });
     for input in inputs {
         let mut iter = params_vec.iter();
-        let param = iter.find(|x| x.trim_start_matches('-') == input.name)
+        let _param = iter.find(|x| x.trim_start_matches('-') == input.name)
             .ok_or(format!(r#"argument "{}" of type "{}" not found"#, input.name, input.kind))?;
 
         let value = iter.next()
@@ -280,26 +289,14 @@ pub fn build_json_from_params(params_vec: Vec<&str>, abi: &str, method: &str) ->
 
         let value = match input.kind {
             ParamType::Uint(_) | ParamType::Int(_) => {
-                if value.ends_with('T') {
-                    json!(convert::convert_token(value.trim_end_matches('T'))?)
-                } else {
-                    json!(value)
-                }
+                json!(parse_integer_param(&value)?)
             },
             ParamType::Array(ref x) => {
                 if let ParamType::Uint(_) = **x {
                     let mut result_vec: Vec<String> = vec![];
                     for i in value.split(|c| c == ',' || c == '[' || c == ']') {
                         if i != "" {
-                            if i.find(|c| (c >= 'a') && (c <= 'f')).is_some()  {
-                                let cur_i = i.trim_matches('\"');
-                                let mut result = String::new();
-                                if !cur_i.starts_with("0x") { result += "0x"; }
-                                result += cur_i;
-                                result_vec.push(result);
-                            } else {
-                                result_vec.push(i.to_owned());
-                            }
+                            result_vec.push(parse_integer_param(i)?)
                         }
                     }
                     json!(result_vec)
@@ -315,4 +312,13 @@ pub fn build_json_from_params(params_vec: Vec<&str>, abi: &str, method: &str) ->
     }
 
     serde_json::to_string(&params_json).map_err(|e| format!("{}", e))
+}
+
+pub fn parse_params(params_vec: Vec<&str>, abi: &str, method: &str) -> Result<String, String> {
+    if params_vec.len() == 1 {
+        // if there is only 1 parameter it must be a json string with arguments
+        Ok(params_vec[0].to_owned())
+    } else {
+        build_json_from_params(params_vec, abi, method)
+    }
 }

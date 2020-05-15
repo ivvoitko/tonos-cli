@@ -28,7 +28,7 @@ mod helpers;
 mod call;
 
 use account::get_account;
-use call::{call_contract, call_contract_with_msg, generate_message, build_json_from_params};
+use call::{call_contract, call_contract_with_msg, generate_message, parse_params};
 use clap::{ArgMatches, SubCommand, Arg, AppSettings};
 use config::{Config, set_config};
 use crypto::{generate_mnemonic, extract_pubkey, generate_keypair};
@@ -79,15 +79,15 @@ fn main_internal() -> Result <(), String> {
         .setting(AppSettings::TrailingVarArg)
         .setting(AppSettings::DontCollapseArgsInUsage)
         .arg(Arg::with_name("METHOD")
-            .help("Name of calling contract method."))
+            .help("Name of the calling method."))
         .arg(Arg::with_name("ADDRESS")
             .help("Contract address."))
         .arg(Arg::with_name("ABI")
-            .help("Json file with contract ABI."))
+            .help("Path to contract ABI file."))
         .arg(Arg::with_name("SIGN")
-            .help("Keypair used to sign message."))
+            .help("Path to keypair file used to sign message."))
         .arg(Arg::with_name("PARAMS")
-            .help("Arguments of the contract method. Must be in the form: --name value ... More that 1 argument can be supplied.")
+            .help("Method arguments. Must be a list of --name value ... pairs or a json string with all arguments.")
             .multiple(true));
 
     let matches = clap_app! (tonlabs_cli =>
@@ -390,7 +390,7 @@ fn callex_command(matches: &ArgMatches, config: Config) -> Result<(), String> {
     let loaded_abi = std::fs::read_to_string(abi.as_ref().unwrap())
         .map_err(|e| format!("failed to read ABI file: {}", e.to_string()))?;
 
-    let params = Some(build_json_from_params(
+    let params = Some(parse_params(
         matches.values_of("PARAMS").unwrap().collect::<Vec<_>>(), &loaded_abi, method.clone().unwrap()
     )?);
     
