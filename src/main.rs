@@ -19,12 +19,13 @@ extern crate serde_json;
 extern crate serde_derive;
 
 mod account;
+mod call;
 mod config;
 mod crypto;
 mod deploy;
 mod genaddr;
 mod helpers;
-mod call;
+mod voting;
 
 use account::get_account;
 use call::{call_contract, call_contract_with_msg, generate_message};
