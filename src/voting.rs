@@ -1,4 +1,4 @@
-use crate::crypto::{SdkClient, parse_string};
+use crate::crypto::{SdkClient};
 use crate::config::Config;
 use crate::call;
 use serde_json;
@@ -138,47 +138,47 @@ const TRANSFER_WITH_COMMENT: &str = r#"{
 			"id": "0x00000000",
 			"inputs": [{"name":"comment","type":"bytes"}],
 			"outputs": []
-		},
+		}
 	],
 	"events": [],
 	"data": []
-};
-"#;
+}"#;
 
 fn encode_transfer_body(text: &str) -> Result<String, String> {
 	let text = hex::encode(text.as_bytes());
 
 	let client = SdkClient::new();
 
-    parse_string(client.request(
+	let abi: serde_json::Value = serde_json::from_str(TRANSFER_WITH_COMMENT).unwrap();
+    client.request(
         "contracts.run.body",
         json!({
-            "abi": json!(TRANSFER_WITH_COMMENT),
+            "abi": abi,
             "function": "transfer",
             "params": json!({
 				"comment": text
 			}),
 			"internal": true,
         })
-    )?)
+    )
 }
 
 pub fn create_proposal(
 	conf: Config,
 	addr: &str,
-	keys: Option<String>,
+	keys: Option<&str>,
 	dest: &str,
 	text: &str,
 ) -> Result<(), String> {
 
-	let msg_body = encode_transfer_body(text)?;
+	let msg_body: serde_json::Value = serde_json::from_str(&encode_transfer_body(text)?).unwrap();
 	
 	let params = json!({
 		"dest": dest,
 		"value": 1000000,
 		"bounce": true,
 		"allBalance": false,
-		"payload": msg_body,
+		"payload": msg_body.get("bodyBase64").unwrap().as_str().unwrap(),
 	});
 
  	call::call_contract(
@@ -187,7 +187,7 @@ pub fn create_proposal(
 		MSIG_ABI.to_string(),
 		"submitTransaction",
 		&serde_json::to_string(&params).unwrap(),
-		keys,
+		keys.map(|s| s.to_owned()),
 		false
 	)
 }
@@ -195,7 +195,7 @@ pub fn create_proposal(
 pub fn vote(
 	conf: Config,
 	addr: &str,
-	keys: Option<String>,
+	keys: Option<&str>,
 	trid: &str,
 ) -> Result<(), String> {
 
@@ -209,7 +209,7 @@ pub fn vote(
 		MSIG_ABI.to_string(),
 		"confirmTransaction",
 		&serde_json::to_string(&params).unwrap(),
-		keys,
+		keys.map(|s| s.to_owned()),
 		false
 	)
 }
